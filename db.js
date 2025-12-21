@@ -1,15 +1,40 @@
 import pg from "pg";
-import env from "dotenv";
-env.config();
+import dotenv from "dotenv";
 
-const { Pool } = pg;
+dotenv.config();
 
-const db = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: 5432,
+// Railway provides the DATABASE_URL automatically
+const db = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // Required for Railway/Render production connections
+  },
 });
+
+// THIS IS THE FAIL-SAFE: This script runs every time the server starts
+const initDb = async () => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS expenses (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        description TEXT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        category VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("✅ Database tables confirmed/created");
+  } catch (err) {
+    console.error("❌ Database init failed:", err);
+  }
+};
+
+initDb();
 
 export default db;
